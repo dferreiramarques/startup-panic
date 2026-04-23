@@ -461,7 +461,16 @@ function broadcastLobbies(){
 }
 function broadcastGame(lobby){
   const g=lobby.game;if(!g)return;
-  lobby.players.forEach((ws,i)=>{if(ws)cSend(ws,{type:'GAME_STATE',state:spView(g,i)});});
+  lobby.players.forEach((ws,i)=>{
+    if(!ws)return;
+    try{
+      const state=spView(g,i);
+      cSend(ws,{type:'GAME_STATE',state});
+    }catch(e){
+      console.error('[broadcastGame] spView failed:',e.message,e.stack);
+      cSend(ws,{type:'ERROR',text:'Erro interno ao enviar estado: '+e.message});
+    }
+  });
 }
 function sendLobbyState(lobby,ws,seat){
   cSend(ws,{type:'LOBBY_STATE',lobby:lobbyInfo(lobby),names:lobby.names,mySeat:seat});
@@ -558,7 +567,12 @@ function dispatch(ws,msg){
       for(let i=0;i<bots;i++)players.push({name:`IA Angel ${i+1}`,isBot:true});
       lobby.game=spNewGame(players);
       spLog(lobby.game,`🚀 Startup Panic começou!`);
-      broadcastGame(lobby);scheduleBots(lobby);
+      console.log('[SOLO] Game started for', lobby.names[0], '- players:', lobby.game.n);
+      // Delay slightly to ensure WS is fully ready before sending state
+      setImmediate(()=>{
+        try{broadcastGame(lobby);}catch(e){console.error('[solo start]',e);}
+        scheduleBots(lobby);
+      });
     }
     return;
   }
