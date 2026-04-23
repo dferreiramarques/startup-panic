@@ -298,12 +298,21 @@ function dispatch(msg){
     case 'JOINED':
       myToken=msg.token;mySeat=msg.seat;mySolo=msg.solo;
       sessionStorage.setItem('sp_tok',myToken);
-      SS('s-wait');break;
+      SS('s-wait');
+      // Solo: request game state if not received within 2s
+      if(msg.solo){
+        setTimeout(()=>{
+          if(document.getElementById('s-wait').classList.contains('active')){
+            send({type:'GET_STATE'});
+          }
+        },2000);
+      }
+      break;
     case 'RECONNECTED':
       myToken=sessionStorage.getItem('sp_tok')||'';mySeat=msg.seat;mySolo=msg.solo;
       SS('s-wait');break;
     case 'LOBBY_STATE':renderWait(msg);break;
-    case 'GAME_STATE':G=msg.state;renderGame();break;
+    case 'GAME_STATE':G=msg.state;SS('s-game');renderGame();break;
     case 'GAME_ABORTED':alert(msg.reason||'Jogo cancelado');leaveGame();break;
     case 'ERROR':showToast('⚠ '+msg.text);break;
   }
@@ -316,14 +325,16 @@ function renderLobbies(lobbies){
     const full=l.seated>=l.maxP||l.playing;
     const div=document.createElement('div');
     div.className='lcard'+(full?' playing':'');
-    div.innerHTML=`<div class="lcard-info"><div class="lcard-name">${l.name}</div><div class="lcard-sub">${l.solo?'Solo vs IA':`${l.seated}/${l.maxP} jogadores`}</div></div><span class="lcard-status ${full?'full':'open'}">${l.playing?'A jogar':l.seated>0?'Aberta':'Vazia'}</span>${!full?`<button class="btn-enter" onclick="joinLobby('${l.id}')">Entrar</button>`:''}`;
+    div.innerHTML=`<div class="lcard-info"><div class="lcard-name">${l.name}</div><div class="lcard-sub">${l.solo?'Solo vs IA':`${l.seated}/${l.maxP} jogadores`}</div></div><span class="lcard-status ${full?'full':'open'}">${l.playing?'A jogar':l.seated>0?'Aberta':'Vazia'}</span>${!full?`<button class="btn-enter" onclick="joinLobby('${l.id}',${l.solo})">Entrar</button>`:''}`;
     c.appendChild(div);
   });
 }
 
-function joinLobby(id){
+function joinLobby(id,isSolo){
   myLobbyId=id;
-  const tok=sessionStorage.getItem('sp_tok')||'';
+  // For solo, always fresh join (stale token causes stuck wait screen)
+  const tok=isSolo?'':sessionStorage.getItem('sp_tok')||'';
+  if(isSolo) sessionStorage.removeItem('sp_tok');
   send({type:'JOIN',lobbyId:id,name:myName,token:tok});
 }
 
