@@ -474,7 +474,7 @@ function scheduleBots(lobby){
     const p=g.players[g.cur];if(!p?.isBot)return;
     const action=spBot(g);
     if(action){const res=spHandle(g,g.cur,action);broadcastGame(lobby);}
-    if(g.game?.phase!=='GAME_OVER') scheduleBots(lobby);
+    if(g.phase!=='GAME_OVER') scheduleBots(lobby);
   },1000);
 }
 
