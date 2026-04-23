@@ -498,7 +498,7 @@ const server=http.createServer((req,res)=>{
     res.end(data);
   });
 });
-const wss=new WebSocketServer({server});
+const wss=new WebSocketServer({server, perMessageDeflate:false});
 
 wss.on('connection',ws=>{
   cSend(ws,{type:'LOBBIES',lobbies:Object.values(LOBBIES).map(lobbyInfo)});
