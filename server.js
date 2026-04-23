@@ -586,7 +586,7 @@ function dispatch(ws,msg){
     spLog(lobby.game,'🚀 Startup Panic começou!');
     broadcastGame(lobby);return;
   }
-  if(msg.type==='GET_STATE'){
+  if(msg.type==='REQUEST_STATE'||msg.type==='GET_STATE'){
     const st=WS_MAP.get(ws);if(!st)return;
     const lobby=LOBBIES[st.lobbyId];if(!lobby?.game)return;
     cSend(ws,{type:'GAME_STATE',state:spView(lobby.game,st.seat)});
