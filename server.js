@@ -558,21 +558,21 @@ function dispatch(ws,msg){
     lobby.players[seat]=ws;lobby.names[seat]=msg.name||'?';lobby.tokens[seat]=token;
     SESSIONS[token]={lobbyId:msg.lobbyId,seat};
     WS_MAP.set(ws,{lobbyId:msg.lobbyId,seat,token});
-    sessionStorage_compat: cSend(ws,{type:'JOINED',seat,token,solo:lobby.solo});
-    sendLobbyState(lobby,ws,seat);broadcastLobbies();
+    cSend(ws,{type:'JOINED',seat,token,solo:lobby.solo});
+    sendLobbyState(lobby,ws,seat);
+    broadcastLobbies();
     // Start solo immediately
     if(lobby.solo){
       const bots=lobby.bots||1;
       const players=[{name:lobby.names[0],isBot:false}];
-      for(let i=0;i<bots;i++)players.push({name:`IA Angel ${i+1}`,isBot:true});
+      for(let i=0;i<bots;i++) players.push({name:`IA Angel ${i+1}`,isBot:true});
       lobby.game=spNewGame(players);
-      spLog(lobby.game,`🚀 Startup Panic começou!`);
-      console.log('[SOLO] Game started for', lobby.names[0], '- players:', lobby.game.n);
-      // Delay slightly to ensure WS is fully ready before sending state
-      setImmediate(()=>{
-        try{broadcastGame(lobby);}catch(e){console.error('[solo start]',e);}
-        scheduleBots(lobby);
-      });
+      spLog(lobby.game,'🚀 Startup Panic começou!');
+      console.log('[SOLO] started for', lobby.names[0]);
+      // Send directly to the joining ws — avoids any timing issues
+      const state=spView(lobby.game,seat);
+      cSend(ws,{type:'GAME_STATE',state});
+      scheduleBots(lobby);
     }
     return;
   }
@@ -585,6 +585,12 @@ function dispatch(ws,msg){
     lobby.game=spNewGame(players);
     spLog(lobby.game,'🚀 Startup Panic começou!');
     broadcastGame(lobby);return;
+  }
+  if(msg.type==='GET_STATE'){
+    const st=WS_MAP.get(ws);if(!st)return;
+    const lobby=LOBBIES[st.lobbyId];if(!lobby?.game)return;
+    cSend(ws,{type:'GAME_STATE',state:spView(lobby.game,st.seat)});
+    return;
   }
   if(msg.type==='LEAVE_LOBBY'){
     const st=WS_MAP.get(ws);if(!st)return;
