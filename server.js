@@ -445,7 +445,7 @@ const LOBBY_DEFS = [
   {id:'sp-solo', name:'Solo vs 1 IA', maxP:1,solo:true,bots:1},
 ];
 
-const LOBBIES={},SESSIONS={},WS_MAP=new WeakMap();
+const LOBBIES={},SESSIONS={},WS_MAP=new WeakMap(),CONNS=new Set();
 LOBBY_DEFS.forEach(d=>{
   LOBBIES[d.id]={...d,players:Array(d.maxP).fill(null),names:Array(d.maxP).fill(''),
     tokens:Array(d.maxP).fill(null),game:null,graceTimers:Array(d.maxP).fill(null),
@@ -457,7 +457,7 @@ function lobbyInfo(l){return{id:l.id,name:l.name,solo:l.solo,maxP:l.maxP,
   seated:l.players.filter(Boolean).length,playing:!!l.game};}
 function broadcastLobbies(){
   const ls=Object.values(LOBBIES).map(lobbyInfo);
-  WS_MAP.forEach((_,ws)=>{cSend(ws,{type:'LOBBIES',lobbies:ls});});
+  CONNS.forEach(ws=>{cSend(ws,{type:'LOBBIES',lobbies:ls});});
 }
 function broadcastGame(lobby){
   const g=lobby.game;if(!g)return;
@@ -501,9 +501,11 @@ const server=http.createServer((req,res)=>{
 const wss=new WebSocketServer({server, perMessageDeflate:false});
 
 wss.on('connection',ws=>{
+  CONNS.add(ws);
   cSend(ws,{type:'LOBBIES',lobbies:Object.values(LOBBIES).map(lobbyInfo)});
   ws.on('message',raw=>{try{dispatch(ws,JSON.parse(raw));}catch(e){console.error(e);}});
   ws.on('close',()=>{
+    CONNS.delete(ws);
     const st=WS_MAP.get(ws);if(!st?.lobbyId)return;
     const lobby=LOBBIES[st.lobbyId];if(!lobby)return;
     const{seat,token}=st;
@@ -559,19 +561,23 @@ function dispatch(ws,msg){
     SESSIONS[token]={lobbyId:msg.lobbyId,seat};
     WS_MAP.set(ws,{lobbyId:msg.lobbyId,seat,token});
     cSend(ws,{type:'JOINED',seat,token,solo:lobby.solo});
-    sendLobbyState(lobby,ws,seat);
+    if(!lobby.solo) sendLobbyState(lobby,ws,seat);
     broadcastLobbies();
-    // Start solo immediately
     if(lobby.solo){
       const bots=lobby.bots||1;
       const players=[{name:lobby.names[0],isBot:false}];
       for(let i=0;i<bots;i++) players.push({name:`IA Angel ${i+1}`,isBot:true});
       lobby.game=spNewGame(players);
       spLog(lobby.game,'🚀 Startup Panic começou!');
-      console.log('[SOLO] started for', lobby.names[0]);
-      // Send directly to the joining ws — avoids any timing issues
-      const state=spView(lobby.game,seat);
-      cSend(ws,{type:'GAME_STATE',state});
+      console.log('[SOLO] game created, n='+lobby.game.n+' phase='+lobby.game.phase);
+      try{
+        const state=spView(lobby.game,0);
+        console.log('[SOLO] spView ok, sending GAME_STATE');
+        cSend(ws,{type:'GAME_STATE',state});
+      }catch(e){
+        console.error('[SOLO] spView CRASHED:',e.message,e.stack);
+        cSend(ws,{type:'ERROR',text:'Erro ao iniciar jogo: '+e.message});
+      }
       scheduleBots(lobby);
     }
     return;
