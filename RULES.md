@@ -78,23 +78,25 @@ Pool partilhada de 12 trabalhadores (3 de cada tipo), disponíveis para contrata
 Ações disponíveis para quem tem o turno:
 
 - **Comprar ações** (`SP_BUY`): compra `qty` ações de uma startup viva ao preço atual (`preço × qty`), pagando em cash.
-- **Vender startup** (`SP_SELL_STARTUP`) — só se o **Gate de Venda** estiver aberto e o jogador tiver a **maioria** de ações dessa startup. Ganha `preço × ações × multiplicador do gate` em cash, e perde todas as ações dessa startup.
-- **Trocar ações** (`SP_TRADE`) — só durante um Gate de Venda. Troca *todas* as ações que tens numa startup pelas de outro jogador noutra startup (ambos precisam de ter ações nas respetivas startups).
+- **Vender startup** (`SP_SELL_STARTUP`) — só se o **Gate de Venda** estiver aberto e o jogador tiver **maioria real** (mais de 50% das ações emitidas dessa startup) — não basta empatar no topo. Ganha `preço × ações × multiplicador do gate` em cash, e perde todas as ações dessa startup.
+- **Trocar ações** (`SP_TRADE`) — só durante um Gate de Venda **e na tua vez**. Troca *todas* as ações que tens numa startup pelas de outro jogador noutra startup (ambos precisam de ter ações nas respetivas startups); ações que o recetor já tivesse na startup recebida são somadas, nunca substituídas.
 - **Fechar Mercado** (`SP_END_MARKET`): avança para a fase de Manutenção.
 
 ### Gate de Venda
 
-Abre automaticamente nas rondas 4, 8 e 12 (contadas pelo índice global do CEO, 1-indexado). O multiplicador de venda depende do arquétipo do CEO dessa ronda:
+Abre automaticamente nas rondas 4, 8 e 12 (contadas pelo índice global do CEO, 1-indexado). Cada gate tem um **piso garantido, crescente por ronda** (×5 na ronda 4, ×10 na ronda 8, ×20 na ronda 12), para que o multiplicador nunca dependa só da sorte de qual CEO calha nessa ronda. O arquétipo do CEO que sai nessa ronda ainda empurra o multiplicador — mas proporcionalmente, não em ordens de grandeza:
 
-- CEOs de **alto multiplicador** (Sam A., Elon V., Whitney W., Sam B.) → ×20
-- CEOs **neutros** → ×5
-- CEOs de **baixo multiplicador** (Mark Z., Jensen H., Patrick C., Brian C.) → ×1
+- CEOs de **alto multiplicador** (Sam A., Elon V., Whitney W., Sam B.) → piso ×1.5
+- CEOs **neutros** → piso ×1 (sem alteração)
+- CEOs de **baixo multiplicador** (Mark Z., Jensen H., Patrick C., Brian C.) → piso ×0.7
 
-Whitney W. pode ainda somar +1 "nível" de multiplicador (efeito acumulável, `gateMultiplierBonus`).
+Whitney W. pode ainda somar +1 ao multiplicador final (efeito acumulável, `gateMultiplierBonus`).
+
+> Nota histórica: a versão original usava só 3 valores fixos (×1/×5/×20) escolhidos inteiramente pelo arquétipo do CEO que calhasse nas rondas 4/8/12 — um jogo podia nunca ver mais que ×1 nos três gates, por puro azar de baralhamento. O piso por ronda corrige essa variância excessiva.
 
 ### Fase MAINTENANCE (Manutenção)
 
-- **Contratar** (`SP_HIRE`): tira um trabalhador disponível da pool e atribui-o a uma das tuas startups (precisas de ter ações nela para receber dividendos, mas a contratação em si não o exige). Escolhe Estagiário (grátis) ou Sénior (2M).
+- **Contratar** (`SP_HIRE`): tira um trabalhador disponível da pool e atribui-o a uma das tuas startups (precisas de ter ações nela para receber dividendos, mas a contratação em si não o exige). Escolhe Estagiário (grátis) ou Sénior (2M). **Máximo 1 trabalhador de cada tipo por startup, por jogador** (no máximo 4 — um engenheiro, um advogado, um PR, um CFO — por startup).
 - **Despedir** (`SP_FIRE`): remove um trabalhador teu, que volta à pool partilhada.
 - **Mover trabalhador** (`SP_MOVE_WORKER`): muda um trabalhador de startup, pagando uma indemnização (1M Estagiário / 2M Sénior).
 - **Pagar Salários** (`SP_PAY_SALARY`): paga 1M (+ sobretaxa, se ativa) por cada trabalhador Sénior teu. Se não tiveres cash suficiente para algum, esse Sénior abandona-te e volta à pool.

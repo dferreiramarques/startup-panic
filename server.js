@@ -69,7 +69,9 @@ const CEO_DEFS = [
 // Gate multipliers by CEO archetype
 const HIGH_MULT_CEOS = new Set(['sa','ev','ww','sb']);
 const LOW_MULT_CEOS  = new Set(['mz','jh','pc','bc']);
-const GATE_MULTS = [1,5,20];
+// Piso garantido por ronda (não depende só da sorte de qual CEO calha nesse gate);
+// o arquétipo do CEO ainda empurra o multiplicador para cima/baixo, mas em proporção, não em ordens de grandeza.
+const GATE_BASE_BY_ROUND = {4:5, 8:10, 12:20};
 
 // Worker pool — names + types
 const WORKER_TYPES = ['engineer','lawyer','pr','cfo'];
@@ -179,8 +181,9 @@ function startRound(g){
   const globalTurn=g.ceoIdx; // 1-indexed
   if(globalTurn===4||globalTurn===8||globalTurn===12){
     g.gateOpen=true;
-    const mIdx=HIGH_MULT_CEOS.has(ceoId)?2:LOW_MULT_CEOS.has(ceoId)?0:1;
-    g.gateMultiplier=GATE_MULTS[Math.min(2,mIdx+(g.gateMultiplierBonus||0))];
+    const base=GATE_BASE_BY_ROUND[globalTurn];
+    const archMult=HIGH_MULT_CEOS.has(ceoId)?1.5:LOW_MULT_CEOS.has(ceoId)?0.7:1;
+    g.gateMultiplier=Math.max(1,Math.round(base*archMult))+(g.gateMultiplierBonus||0);
     spLog(g,`🔔 Gate de Venda! Multiplicador ×${g.gateMultiplier} — ${ceo.name}`);
   } else {
     g.gateOpen=false;
@@ -227,7 +230,8 @@ function spHandle(g,seat,msg){
     if(g.phase!=='MARKET'||g.cur!==seat)return{error:'Não é o teu turno'};
     const su=g.startups.find(s=>s.id===msg.startupId);
     if(!su||su.imploded)return{error:'Startup inválida'};
-    const qty=msg.qty||1;
+    const qty=msg.qty===undefined?1:msg.qty;
+    if(!Number.isInteger(qty)||qty<1)return{error:'Quantidade inválida'};
     const cost=su.price*qty;
     if(p.cash<cost)return{error:`Precisas de ${cost}M (tens ${p.cash}M)`};
     p.cash-=cost;
@@ -241,9 +245,9 @@ function spHandle(g,seat,msg){
     if(!g.gateOpen||g.cur!==seat)return{error:'Gate de Venda não está aberto'};
     const su=g.startups.find(s=>s.id===msg.startupId);if(!su)return{error:'Startup inválida'};
     const shares=su.shares[seat]||0;if(!shares)return{error:'Não tens acções'};
-    const maxSh=Math.max(0,...Object.values(su.shares));
-    if(shares<maxSh)return{error:'Precisas de maioria para vender'};
-    const mult=g.gateMultiplier+(g.gateMultiplierBonus||0);
+    const totalShares=Object.values(su.shares).reduce((a,b)=>a+b,0);
+    if(shares*2<=totalShares)return{error:'Precisas de maioria real (mais de 50%) para vender'};
+    const mult=g.gateMultiplier;
     const proceeds=Math.round(su.price*shares*mult);
     p.cash+=proceeds;
     su.shares[seat]=0;p.shares[su.id]=0;
@@ -252,19 +256,20 @@ function spHandle(g,seat,msg){
   }
 
   if(msg.type==='SP_TRADE'){
-    if(!g.gateOpen)return{error:'Só é possível trocar em Gate de Venda'};
+    if(!g.gateOpen||g.cur!==seat)return{error:'Só podes trocar na tua vez, com o Gate de Venda aberto'};
     const {fromSu,toSeat,toSu}=msg;
+    if(toSeat===seat)return{error:'Não podes trocar contigo mesmo'};
     const target=g.players[toSeat];if(!target||target.isBot)return{error:'Alvo inválido'};
     const su1=g.startups.find(s=>s.id===fromSu);
     const su2=g.startups.find(s=>s.id===toSu);
     if(!su1||!su2)return{error:'Startups inválidas'};
     const sh1=su1.shares[seat]||0,sh2=su2.shares[toSeat]||0;
     if(!sh1||!sh2)return{error:'Ambos precisam de acções nas respectivas startups'};
-    // Swap all shares
-    su1.shares[seat]=0;su1.shares[toSeat]=sh1;
-    su2.shares[toSeat]=0;su2.shares[seat]=sh2;
-    p.shares[su1.id]=0;p.shares[su2.id]=sh2;
-    target.shares[su2.id]=0;target.shares[su1.id]=sh1;
+    // Swap all shares — soma às que o receptor já tenha, nunca sobrescreve
+    su1.shares[seat]=0;su1.shares[toSeat]=(su1.shares[toSeat]||0)+sh1;
+    su2.shares[toSeat]=0;su2.shares[seat]=(su2.shares[seat]||0)+sh2;
+    p.shares[su1.id]=0;p.shares[su2.id]=su2.shares[seat];
+    target.shares[su2.id]=0;target.shares[su1.id]=su1.shares[toSeat];
     spLog(g,`🔄 ${p.name} trocou ${su1.name} com ${target.name} por ${su2.name}`);
     return{ok:true};
   }
@@ -282,6 +287,8 @@ function spHandle(g,seat,msg){
     if(!worker)return{error:'Trabalhador não disponível'};
     const su=g.startups.find(s=>s.id===msg.startupId);
     if(!su||su.imploded)return{error:'Startup inválida'};
+    if(p.workers.some(w=>w.startupId===su.id&&w.type===worker.type))
+      return{error:`Já tens um(a) ${worker.type} nesta startup`};
     const senior=!!msg.senior;
     // Hiring cost: senior = 2× salary upfront, junior = free
     const salary=senior?2:0;
@@ -376,7 +383,7 @@ function spView(g,seat){
   const ceoSafe=ceo?{id:ceo.id,name:ceo.name,role:ceo.role,sector:ceo.sector,hasRoll:ceo.hasRoll}:null;
   return {
     n:g.n,cur:g.cur,myIdx:seat,round:g.round,phase:g.phase,
-    gateOpen:g.gateOpen,gateMultiplier:g.gateMultiplier+(g.gateMultiplierBonus||0),
+    gateOpen:g.gateOpen,gateMultiplier:g.gateMultiplier,
     currentCeo:ceoSafe,currentRoll:g.currentRoll,ceoLog:g.ceoLog,
     sectorValues:g.sectorValues,
     players:g.players.map((p,i)=>({
