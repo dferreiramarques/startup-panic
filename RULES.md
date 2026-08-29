@@ -119,6 +119,17 @@ Sem trabalhadores alocados a uma startup, essa startup não paga dividendos a es
 
 Pontuação de cada jogador = `cash + Σ (ações × preço atual)` de todas as startups não implodidas. Ganha quem tiver a pontuação mais alta.
 
+## Estratégia — mecânicas principais para melhorar o resultado
+
+Estas são as alavancas que mais pesam na pontuação final (`cash + ações ao preço atual`), por ordem de impacto:
+
+1. **O motor de dividendos é o que compõe o teu cash ao longo do jogo.** Uma ação sem trabalhador não paga nada — o dividendo só existe se tiveres pelo menos 1 trabalhador nessa startup. Com o limite de 1 trabalhador por tipo (máx. 4 por startup), o Engenheiro Sénior é normalmente o melhor investimento: dá 4M/ação/ronda (o dobro do Estagiário) por 2M de entrada + 1M/ronda. Com apenas 1 ação já compensa a partir da 2ª/3ª ronda; com 3+ ações compensa quase de imediato. Quanto mais cedo contratares Séniores, mais rondas tens para amortizar o custo.
+2. **Concentra ações onde queres maioria real, diversifica onde só queres exposição.** Só consegues vender no Gate (multiplicador ×5/×10/×20) se tiveres **mais de 50%** das ações emitidas dessa startup — não basta ser o maior acionista. Espalhar compras por muitas startups dá dividendos mas nunca te dá controlo suficiente para um "exit" grande. Vale a pena escolher 1–2 startups (idealmente as mais baratas, para maioria custar menos) e ir a fundo nelas antes de cada gate.
+3. **Os CEOs são revelados no início da ronda, antes de jogares** — não dá para adivinhar o próximo, mas dá para reagir: um setor que acabou de ser empurrado para baixo (ex.: Mark Z. tira −1M à IA) fica mais barato para entrar nessa ronda, antes de uma eventual recuperação numa ronda seguinte.
+4. **Gere o risco de implosão diversificando a exposição de alto risco.** Elon V., Travis K. e Sam B. podem implodir uma startup aleatória (perdes tudo o que lá tinhas investido, sem aviso). Ter uma posição enorme numa única startup maximiza o potencial de maioria, mas também o risco — o trade-off com o ponto 2 é real e não há solução única.
+5. **Cash-flow dos salários**: um Sénior sem cash para o salário abandona-te automaticamente (perdes o trabalhador, não só o dinheiro investido). Mantém sempre reserva de cash para cobrir os salários dos teus Séniores antes de gastar tudo em compras.
+6. **Vender no Gate "realiza" o multiplicador; guardar ações até ao fim não.** A pontuação final conta as ações ao preço de mercado normal (×1), não ao multiplicador do gate. Ou seja, ações que nunca vendes num gate só valem o preço à vista no fim — o verdadeiro lucro do jogo vem de vender com maioria num gate bom, não de acumular ações indefinidamente.
+
 ## Turno de exemplo (passo a passo)
 
 Suponhamos uma partida a 2 jogadores, **Ana** e **Bruno**, na Ronda 3.
