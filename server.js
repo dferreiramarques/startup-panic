@@ -13,6 +13,11 @@ const MIME    = {'.html':'text/html;charset=utf-8','.js':'application/javascript
 // ═══════════════════════════════════════════════════════
 const SECTORS = ['ia','fintech','seguranca','biotech','energia'];
 const SECTOR_LABEL = {ia:'IA',fintech:'Fintech',seguranca:'Segurança',biotech:'Biotech',energia:'Energia'};
+// Máximo de ações da mesma startup que um único jogador pode acumular — evita que alguém
+// consolide sozinho, sem contestação, uma posição de maioria perpétua numa única startup.
+const MAX_SHARES_PER_STARTUP = 4;
+// Limite de trabalhadores por jogador — impede que quem joga primeiro açambarque a pool partilhada.
+const MAX_WORKERS_PER_PLAYER = 4;
 
 // 10 startups, 2 per sector
 const STARTUP_DEFS = [
@@ -131,19 +136,30 @@ function spNewGame(players){
   }));
   const ceoDeck=shuf(CEO_DEFS.map(c=>c.id));
   const workerPool=buildWorkerPool();
+  // Ronda 1: jogador inicial sorteado, depois no sentido normal
+  const first=0|Math.random()*ps.length;
+  const order=ps.map((_,i)=>(first+i)%ps.length);
   return {
     n:ps.length,players:ps,startups,
     ceoDeck,ceoIdx:0,
     currentCeo:null,currentRoll:null,ceoLog:'',
     sectorValues:{ia:0,fintech:0,seguranca:0,biotech:0,energia:0},
     workerPool,
-    turn:0,round:1,cur:0,
+    turn:0,round:1,order,pos:0,cur:order[0],
     phase:'MARKET', // MARKET | MAINTENANCE | GAME_OVER
     gateOpen:false,gateMultiplier:1,gateMultiplierBonus:0,
     safeThisTurn:false,salarySurcharge:0,pendingPenalty:null,
     dividendLog:[],
-    log:['🚀 Startup Panic começou! Ronda 1 — ' + ps[0].name],
+    log:['🚀 Startup Panic começou! Ronda 1 — ' + ps[order[0]].name],
   };
+}
+
+// Ordem de jogo de cada ronda: joga primeiro quem tem ações na startup mais cara,
+// depois a segunda mais cara, etc. Quem não tem ações joga no fim.
+// Empates mantêm a ordem da ronda anterior.
+function computeOrder(g){
+  const best=i=>Math.max(0,...g.startups.filter(s=>!s.imploded&&(s.shares[i]||0)>0).map(s=>s.price));
+  return g.order.slice().sort((a,b)=>best(b)-best(a)||g.order.indexOf(a)-g.order.indexOf(b));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -232,12 +248,28 @@ function spHandle(g,seat,msg){
     if(!su||su.imploded)return{error:'Startup inválida'};
     const qty=msg.qty===undefined?1:msg.qty;
     if(!Number.isInteger(qty)||qty<1)return{error:'Quantidade inválida'};
+    const current=su.shares[seat]||0;
+    if(current+qty>MAX_SHARES_PER_STARTUP)return{error:`Máximo de ${MAX_SHARES_PER_STARTUP} ações por startup (já tens ${current})`};
     const cost=su.price*qty;
     if(p.cash<cost)return{error:`Precisas de ${cost}M (tens ${p.cash}M)`};
     p.cash-=cost;
     su.shares[seat]=(su.shares[seat]||0)+qty;
     p.shares[su.id]=(p.shares[su.id]||0)+qty;
     spLog(g,`💰 ${p.name} comprou ${qty}× ${su.name} (${cost}M)`);
+    return{ok:true};
+  }
+
+  if(msg.type==='SP_SELL_MARKET'){
+    if(g.phase!=='MARKET'||g.cur!==seat)return{error:'Não é o teu turno'};
+    const su=g.startups.find(s=>s.id===msg.startupId);if(!su)return{error:'Startup inválida'};
+    if(su.imploded)return{error:'Startup implodida, sem valor'};
+    const shares=su.shares[seat]||0;if(!shares)return{error:'Não tens acções'};
+    const qty=msg.qty===undefined?shares:msg.qty;
+    if(!Number.isInteger(qty)||qty<1||qty>shares)return{error:'Quantidade inválida'};
+    const proceeds=su.price*qty;
+    p.cash+=proceeds;
+    su.shares[seat]-=qty;p.shares[su.id]=(p.shares[su.id]||0)-qty;
+    spLog(g,`📤 ${p.name} vendeu ${qty}× ${su.name} no mercado por ${proceeds}M`);
     return{ok:true};
   }
 
@@ -289,6 +321,8 @@ function spHandle(g,seat,msg){
     if(!su||su.imploded)return{error:'Startup inválida'};
     if(p.workers.some(w=>w.startupId===su.id&&w.type===worker.type))
       return{error:`Já tens um(a) ${worker.type} nesta startup`};
+    if(p.workers.length>=MAX_WORKERS_PER_PLAYER)
+      return{error:`Máximo de ${MAX_WORKERS_PER_PLAYER} trabalhadores por jogador`};
     const senior=!!msg.senior;
     // Hiring cost: senior = 2× salary upfront, junior = free
     const salary=senior?2:0;
@@ -347,14 +381,17 @@ function spHandle(g,seat,msg){
 
   if(msg.type==='SP_END_TURN'){
     if(g.phase!=='MAINTENANCE'||g.cur!==seat)return{error:'Não é o teu turno'};
-    // Next player
-    g.cur=(g.cur+1)%g.n;
-    if(g.cur===0){
+    // Next player in this round's order
+    g.pos++;
+    if(g.pos>=g.n){
       // All players done — end of round
       endRound(g);
       if(g.ceoIdx>=12){spEndGame(g);return{ok:true};}
       startRound(g);
+      g.order=computeOrder(g);g.pos=0;
+      spLog(g,`🔀 Ordem: ${g.order.map(i=>g.players[i].name).join(' → ')}`);
     }
+    g.cur=g.order[g.pos];
     g.phase='MARKET';
     spLog(g,`→ Turno de ${g.players[g.cur].name}`);
     return{ok:true};
@@ -382,7 +419,7 @@ function spView(g,seat){
   const ceo=g.currentCeo?ceoData(g.currentCeo):null;
   const ceoSafe=ceo?{id:ceo.id,name:ceo.name,role:ceo.role,sector:ceo.sector,hasRoll:ceo.hasRoll}:null;
   return {
-    n:g.n,cur:g.cur,myIdx:seat,round:g.round,phase:g.phase,
+    n:g.n,cur:g.cur,myIdx:seat,round:g.round,phase:g.phase,shareCap:MAX_SHARES_PER_STARTUP,workerCap:MAX_WORKERS_PER_PLAYER,order:g.order,
     gateOpen:g.gateOpen,gateMultiplier:g.gateMultiplier,
     currentCeo:ceoSafe,currentRoll:g.currentRoll,ceoLog:g.ceoLog,
     sectorValues:g.sectorValues,

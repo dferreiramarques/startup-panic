@@ -478,11 +478,13 @@ function renderGame(){
 
 function renderPbar(){
   const c=el('pbar'); c.innerHTML='';
-  G.players.forEach((p,i)=>{
+  const seq=G.order||G.players.map((_,i)=>i);
+  seq.forEach((i,pos)=>{
+    const p=G.players[i];
     const d=document.createElement('div');
     d.className='pchip'+(i===G.cur?' active':'');
     const cashStr=i===G.myIdx?p.cash+'M':'?';
-    d.innerHTML=`<div class="pdot" style="background:${PCOL[i%4]}"></div><span class="pname">${p.name}${p.isBot?' 🤖':''}${i===G.myIdx?' ★':''}</span><span class="pcash">${cashStr}</span>`;
+    d.innerHTML=`<div class="pdot" style="background:${PCOL[i%4]}"></div><span class="pname">${pos+1}. ${p.name}${p.isBot?' 🤖':''}${i===G.myIdx?' ★':''}</span><span class="pcash">${cashStr}</span>`;
     c.appendChild(d);
   });
 }
@@ -613,28 +615,38 @@ function renderActions(){
       :'Compra acções de startups para o teu portfólio. Seleciona uma startup no mapa para interagir.';
 
     // Buy
+    const shareCap=G.shareCap||4;
     if(su&&!su.imploded){
+      const myShares=su.myShares||0;
+      const room=shareCap-myShares;
       const cost=su.price;
-      const can=(me.cash||0)>=cost;
-      abtn(btns,`Comprar 1× ${su.name}`,`Custa ${cost}M — tens ${me.cash||0}M`,can,'primary',
+      const can=room>=1&&(me.cash||0)>=cost;
+      abtn(btns,`Comprar 1× ${su.name}`,room>=1?`Custa ${cost}M — tens ${me.cash||0}M`:`Máximo de ${shareCap} ações atingido`,can,'primary',
         ()=>send({type:'SP_BUY',startupId:su.id,qty:1}));
-      // Buy 3 if can afford
+      // Buy 3 if can afford and within cap
       const cost3=su.price*3;
-      const can3=(me.cash||0)>=cost3;
-      abtn(btns,`Comprar 3× ${su.name}`,`Pacote de 3 por ${cost3}M`,can3,'',
+      const can3=room>=3&&(me.cash||0)>=cost3;
+      abtn(btns,`Comprar 3× ${su.name}`,room>=3?`Pacote de 3 por ${cost3}M`:`Só cabem mais ${Math.max(0,room)} (máx. ${shareCap})`,can3,'',
         ()=>send({type:'SP_BUY',startupId:su.id,qty:3}));
     } else {
       abtn(btns,'Comprar acções','Seleciona uma startup no mapa',false,'primary',null);
     }
 
-    // Sell at gate
+    // Sell at market, any time, no multiplier
+    if(su&&!su.imploded&&(su.myShares||0)>0){
+      const myShares=su.myShares;
+      abtn(btns,`Vender ${su.name} no Mercado`,
+        `${myShares} acções × ${su.price}M = ${su.price*myShares}M (sem multiplicador)`,
+        true,'',()=>send({type:'SP_SELL_MARKET',startupId:su.id}));
+    }
+
+    // Sell at gate (precisa de maioria real: mais de 50% das acções emitidas)
     if(G.gateOpen&&su&&!su.imploded){
       const myShares=su.myShares||0;
-      const maxSh=su.majority?parseInt(su.majority[1]):0;
-      const canSell=myShares>0&&myShares>=maxSh;
+      const canSell=myShares>0&&myShares*2>su.totalShares;
       abtn(btns,`Vender ${su.name} ×${G.gateMultiplier}`,
         canSell?`${myShares} acções × ${su.price}M × ${G.gateMultiplier} = ${Math.round(su.price*myShares*G.gateMultiplier)}M`
-               :'Precisas de maioria para vender',
+               :'Precisas de maioria real (mais de 50%) para vender',
         canSell,'gold',()=>send({type:'SP_SELL_STARTUP',startupId:su.id}));
     }
 

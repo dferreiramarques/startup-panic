@@ -67,7 +67,8 @@ Pool partilhada de 12 trabalhadores (3 de cada tipo), disponíveis para contrata
 
 - 12 rondas no total (uma por CEO do baralho).
 - Cada ronda: **um CEO é revelado automaticamente** (com dado, se aplicável) e o seu efeito aplicado a todos.
-- Dentro de cada ronda, **cada jogador joga o seu turno** em sequência. Um turno tem duas fases:
+- **Ordem de jogo** (muda a cada ronda): na ronda 1 o jogador inicial é sorteado e segue-se no sentido normal. Nas rondas seguintes, depois de revelado o CEO e atualizados os preços, **joga primeiro quem tem ações na startup mais cara**, depois quem tem ações na segunda mais cara, e assim por diante (conta-se a startup mais cara em que cada jogador tem ações). Quem não tem ações joga no fim. Empates mantêm a ordem da ronda anterior. No jogo físico basta percorrer a pista de preços de cima para baixo.
+- Dentro de cada ronda, **cada jogador joga o seu turno** por essa ordem. Um turno tem duas fases:
   1. **MARKET** (Mercado)
   2. **MAINTENANCE** (Manutenção da equipa)
 - Quando o último jogador termina o turno, a ronda acaba: pagam-se dividendos, avança-se o baralho de CEOs e começa a ronda seguinte.
@@ -77,8 +78,9 @@ Pool partilhada de 12 trabalhadores (3 de cada tipo), disponíveis para contrata
 
 Ações disponíveis para quem tem o turno:
 
-- **Comprar ações** (`SP_BUY`): compra `qty` ações de uma startup viva ao preço atual (`preço × qty`), pagando em cash.
-- **Vender startup** (`SP_SELL_STARTUP`) — só se o **Gate de Venda** estiver aberto e o jogador tiver **maioria real** (mais de 50% das ações emitidas dessa startup) — não basta empatar no topo. Ganha `preço × ações × multiplicador do gate` em cash, e perde todas as ações dessa startup.
+- **Comprar ações** (`SP_BUY`): compra `qty` ações de uma startup viva ao preço atual (`preço × qty`), pagando em cash. **Máximo de 4 ações da mesma startup por jogador** (`MAX_SHARES_PER_STARTUP`) — impede que alguém consolide sozinho, sem contestação, uma posição de maioria perpétua numa única startup.
+- **Vender no Mercado** (`SP_SELL_MARKET`) — a qualquer momento, na tua vez, fase Mercado, sem precisar do Gate nem de maioria. Vende ao preço atual, **sem multiplicador**. É a válvula de escape de liquidez para quem não tem maioria numa startup e não quer ficar com cash preso até ao fim do jogo.
+- **Vender startup no Gate** (`SP_SELL_STARTUP`) — só se o **Gate de Venda** estiver aberto e o jogador tiver **maioria real** (mais de 50% das ações emitidas dessa startup) — não basta empatar no topo. Ganha `preço × ações × multiplicador do gate` em cash, e perde todas as ações dessa startup.
 - **Trocar ações** (`SP_TRADE`) — só durante um Gate de Venda **e na tua vez**. Troca *todas* as ações que tens numa startup pelas de outro jogador noutra startup (ambos precisam de ter ações nas respetivas startups); ações que o recetor já tivesse na startup recebida são somadas, nunca substituídas.
 - **Fechar Mercado** (`SP_END_MARKET`): avança para a fase de Manutenção.
 
@@ -96,7 +98,7 @@ Whitney W. pode ainda somar +1 ao multiplicador final (efeito acumulável, `gate
 
 ### Fase MAINTENANCE (Manutenção)
 
-- **Contratar** (`SP_HIRE`): tira um trabalhador disponível da pool e atribui-o a uma das tuas startups (precisas de ter ações nela para receber dividendos, mas a contratação em si não o exige). Escolhe Estagiário (grátis) ou Sénior (2M). **Máximo 1 trabalhador de cada tipo por startup, por jogador** (no máximo 4 — um engenheiro, um advogado, um PR, um CFO — por startup).
+- **Contratar** (`SP_HIRE`): tira um trabalhador disponível da pool e atribui-o a uma das tuas startups (precisas de ter ações nela para receber dividendos, mas a contratação em si não o exige). Escolhe Estagiário (grátis) ou Sénior (2M). **Máximo 1 trabalhador de cada tipo por startup, por jogador**, e **máximo de 4 trabalhadores no total por jogador** (`MAX_WORKERS_PER_PLAYER`) — evita que quem joga primeiro açambarque a pool partilhada.
 - **Despedir** (`SP_FIRE`): remove um trabalhador teu, que volta à pool partilhada.
 - **Mover trabalhador** (`SP_MOVE_WORKER`): muda um trabalhador de startup, pagando uma indemnização (1M Estagiário / 2M Sénior).
 - **Pagar Salários** (`SP_PAY_SALARY`): paga 1M (+ sobretaxa, se ativa) por cada trabalhador Sénior teu. Se não tiveres cash suficiente para algum, esse Sénior abandona-te e volta à pool.
@@ -124,7 +126,8 @@ Pontuação de cada jogador = `cash + Σ (ações × preço atual)` de todas as 
 Estas são as alavancas que mais pesam na pontuação final (`cash + ações ao preço atual`), por ordem de impacto:
 
 1. **O motor de dividendos é o que compõe o teu cash ao longo do jogo.** Uma ação sem trabalhador não paga nada — o dividendo só existe se tiveres pelo menos 1 trabalhador nessa startup. Com o limite de 1 trabalhador por tipo (máx. 4 por startup), o Engenheiro Sénior é normalmente o melhor investimento: dá 4M/ação/ronda (o dobro do Estagiário) por 2M de entrada + 1M/ronda. Com apenas 1 ação já compensa a partir da 2ª/3ª ronda; com 3+ ações compensa quase de imediato. Quanto mais cedo contratares Séniores, mais rondas tens para amortizar o custo.
-2. **Concentra ações onde queres maioria real, diversifica onde só queres exposição.** Só consegues vender no Gate (multiplicador ×5/×10/×20) se tiveres **mais de 50%** das ações emitidas dessa startup — não basta ser o maior acionista. Espalhar compras por muitas startups dá dividendos mas nunca te dá controlo suficiente para um "exit" grande. Vale a pena escolher 1–2 startups (idealmente as mais baratas, para maioria custar menos) e ir a fundo nelas antes de cada gate.
+2. **Concentra ações onde queres maioria real, diversifica onde só queres exposição.** Só consegues vender no Gate (multiplicador ×5/×10/×20) se tiveres **mais de 50%** das ações emitidas dessa startup — não basta ser o maior acionista. Como o máximo é 4 ações por startup por jogador, a maioria tem de ser **conquistada antes que outro jogador chegue lá** — não é garantida só por teres sido o primeiro a investir; se mais ninguém disputar essa startup, 1 ação já pode chegar para a maioria.
+   - **Sem maioria, ainda tens saída:** `SP_SELL_MARKET` permite vender ao preço atual a qualquer momento, sem multiplicador — não ficas preso como ficava quem nunca atingia maioria antes desta opção existir.
 3. **Os CEOs são revelados no início da ronda, antes de jogares** — não dá para adivinhar o próximo, mas dá para reagir: um setor que acabou de ser empurrado para baixo (ex.: Mark Z. tira −1M à IA) fica mais barato para entrar nessa ronda, antes de uma eventual recuperação numa ronda seguinte.
 4. **Gere o risco de implosão diversificando a exposição de alto risco.** Elon V., Travis K. e Sam B. podem implodir uma startup aleatória (perdes tudo o que lá tinhas investido, sem aviso). Ter uma posição enorme numa única startup maximiza o potencial de maioria, mas também o risco — o trade-off com o ponto 2 é real e não há solução única.
 5. **Cash-flow dos salários**: um Sénior sem cash para o salário abandona-te automaticamente (perdes o trabalhador, não só o dinheiro investido). Mantém sempre reserva de cash para cobrir os salários dos teus Séniores antes de gastar tudo em compras.
